@@ -1,71 +1,125 @@
 # Pantry MCP Orchestrator
 
-```mermaid
-flowchart LR
-    U[User runs\npython main.py] -->|starts| A[MCPApp\n(dinner_party_orchestrator)]
-    A -->|uses| O[Orchestrator\n(plan_type=full)]
-    O -->|calls| AR1[Agent: pantry_reader]
-    O -->|calls| AR2[Agent: menu_planner]
-    O -->|calls| AR3[Agent: shopping_list_writer]
++--------------------------------------------------------------+
+|                    Pantry MCP Orchestrator                   |
+|                      (python main.py)                        |
++------------------------------+-------------------------------+
+                               |
+                               v
+                    +------------------------+
+                    |        MCPApp          |
+                    |  dinner_party_...      |
+                    +-----------+------------+
+                                |
+                                v
+                       +-----------------+
+                       |  Orchestrator   |
+                       | (mcp-agent)     |
+                       +--------+--------+
+                                |
+              +-----------------+------------------+
+              |                 |                  |
+              v                 v                  v
+   +----------------+  +----------------+  +------------------------+
+   |  Agent         |  |  Agent         |  |  Agent                 |
+   | pantry_reader  |  | menu_planner   |  | shopping_list_writer   |
+   +--------+-------+  +--------+-------+  +-----------+-----------+
+            |                   |                      |
+            |                   |                      |
+            v                   v                      v
+   +----------------------------------------------------------+
+   |              filesystem MCP server (mcp-server-filesystem)|
+   +-----------------------------+----------------------------+
+                                 |
+                                 v
+                        Local project directory
+                                 |
+     +----------------+----------+-----------------------------+
+     |                |          |                             |
+     v                v          v                             v
++---------+     +----------+  +----------------+     +----------------------+
+| task.md |     | plan.md  |  | pantry/        |     | output/              |
+|         |     | (auto)   |  |   pantry.txt   |     |  dinner_plan.md      |
+|         |     |          |  |   ...          |     |  shopping_list.md    |
++---------+     +----------+  +----------------+     +----------------------+
 
-    O -->|LLM calls via\nAugmented LLM| LLM[(LLM\nOpenAI gpt-4o)]
+   Orchestrator:
+   - Reads task.md
+   - Coordinates agents
+   - Writes plan.md
 
-    subgraph MCP Servers
-      FS[filesystem MCP server\n(mcp-server-filesystem)]
-    end
+   Agents:
+   - Use filesystem MCP to read/write files as needed.
 
-    AR1 -->|read pantry files| FS
-    AR2 -->|read pantry summary\nwrite intermediate info| FS
-    AR3 -->|write outputs| FS
 
-    subgraph Local Files
-      TASK[task.md]
-      PLAN[plan.md]
-      PANTRY[pantry/pantry.txt]
-      OUTPUT[output/\ndinner_plan.md\nshopping_list.md]
-    end
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    A -->|reads| TASK
-    O -->|writes| PLAN
-    FS -->|reads| PANTRY
-    FS -->|writes| OUTPUT
-
-### **Sequence Diagram**
-```md
-```mermaid
-sequenceDiagram
-    participant User
-    participant main.py
-    participant Orchestrator
-    participant pantry_reader
-    participant menu_planner
-    participant shopping_list_writer
-    participant FS as filesystem MCP
-    participant LLM
-
-    User->>main.py: run python main.py
-    main.py->>FS: start filesystem server
-    main.py->>main.py: read task.md
-    main.py->>Orchestrator: instantiate orchestrator
-
-    Orchestrator->>LLM: generate plan
-    LLM-->>Orchestrator: list of steps
-
-    Orchestrator->>pantry_reader: read pantry
-    pantry_reader->>FS: list pantry files
-    pantry_reader->>FS: read pantry.txt
-    FS-->>pantry_reader: contents
-    pantry_reader->>LLM: generate summary
-    LLM-->>pantry_reader: structured pantry data
-
-    Orchestrator->>menu_planner: propose 3 menus
-    menu_planner->>LLM: generate menus + missing ingredients
-    LLM-->>menu_planner: menu options
-
-    Orchestrator->>shopping_list_writer: produce output files
-    shopping_list_writer->>LLM: generate markdown
-    shopping_list_writer->>FS: write output/dinner_plan.md
-    shopping_list_writer->>FS: write output/shopping_list.md
-
-    Orchestrator-->>main.py: task complete
-    main.py-->>User: finished
+User
+ |
+ |  run: python main.py
+ v
+main.py
+ |
+ |-- load mcp_agent.config.yaml
+ |-- start MCPApp (dinner_party_orchestrator)
+ |-- ensure filesystem MCP server sees current directory
+ |-- read task.md
+ |-- create Orchestrator with 3 agents
+ v
+Orchestrator
+ |
+ |-- ask LLM to create a plan (multi-step)
+ |   (decide order: pantry_reader -> menu_planner -> shopping_list_writer)
+ |
+ |--------------------------------------------------------+
+ |                                                        |
+ v                                                        v
+Agent: pantry_reader                              Agent: menu_planner
+ |                                                        ^
+ |-- via filesystem MCP:                                  |
+ |      list/read pantry/pantry.txt                       |
+ |-- summarize ingredients using LLM                      |
+ |-- return structured pantry summary                     |
+ +--------------------------------------------------------+
+ |
+ v
+Orchestrator
+ |
+ |-- give pantry summary + task to menu_planner
+ v
+Agent: menu_planner
+ |
+ |-- use LLM to propose 3 menus (starter, main, dessert)
+ |-- mark which ingredients are available vs missing
+ |-- return menus + pros/cons
+ |
+ v
+Orchestrator
+ |
+ |-- decide which menu is “best” (based on instructions)
+ |-- send chosen menu + context to shopping_list_writer
+ v
+Agent: shopping_list_writer
+ |
+ |-- use LLM to generate:
+ |      - dinner_plan.md (friendly explanation)
+ |      - shopping_list.md (grouped list)
+ |-- via filesystem MCP:
+ |      write output/dinner_plan.md
+ |      write output/shopping_list.md
+ |
+ v
+Orchestrator
+ |
+ |-- return final status/result to main.py
+ v
+main.py
+ |
+ |-- print "done" / logging info
+ v
+User
+ |
+ |-- opens files in output/ to see plan & shopping list
+ v
+(End)
