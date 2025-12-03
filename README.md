@@ -1,1 +1,2 @@
-# pantry-mcp-orchestrator
+# Pantry MCP Orchestrator
+
