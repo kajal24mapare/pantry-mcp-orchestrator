@@ -1,8 +1,8 @@
 # Pantry MCP Orchestrator
 
+```mermaid
 flowchart LR
     U[User runs\npython main.py] -->|starts| A[MCPApp\n(dinner_party_orchestrator)]
-
     A -->|uses| O[Orchestrator\n(plan_type=full)]
     O -->|calls| AR1[Agent: pantry_reader]
     O -->|calls| AR2[Agent: menu_planner]
@@ -15,21 +15,24 @@ flowchart LR
     end
 
     AR1 -->|read pantry files| FS
-    AR2 -->|read pantry summary,\nwrite temp files if needed| FS
+    AR2 -->|read pantry summary\nwrite intermediate info| FS
     AR3 -->|write outputs| FS
 
     subgraph Local Files
       TASK[task.md]
-      PLAN[plan.md\n(generated)]
-      PANTRY[pantry/\npantry.txt]
-      OUTPUT[output/\n dinner_plan.md\n shopping_list.md]
+      PLAN[plan.md]
+      PANTRY[pantry/pantry.txt]
+      OUTPUT[output/\ndinner_plan.md\nshopping_list.md]
     end
 
     A -->|reads| TASK
-    O -->|writes plan| PLAN
+    O -->|writes| PLAN
     FS -->|reads| PANTRY
     FS -->|writes| OUTPUT
 
+### **Sequence Diagram**
+```md
+```mermaid
 sequenceDiagram
     participant User
     participant main.py
@@ -40,31 +43,29 @@ sequenceDiagram
     participant FS as filesystem MCP
     participant LLM
 
-    User->>main.py: python main.py
-    main.py->>main.py: load mcp_agent.config.yaml
-    main.py->>FS: start filesystem MCP (uvx mcp-server-filesystem)
+    User->>main.py: run python main.py
+    main.py->>FS: start filesystem server
     main.py->>main.py: read task.md
-    main.py->>Orchestrator: create with 3 agents
+    main.py->>Orchestrator: instantiate orchestrator
 
-    Orchestrator->>LLM: plan steps for task
-    LLM-->>Orchestrator: plan (use pantry_reader, menu_planner, writer)
+    Orchestrator->>LLM: generate plan
+    LLM-->>Orchestrator: list of steps
 
-    Orchestrator->>pantry_reader: execute subtask
-    pantry_reader->>FS: read pantry/pantry.txt
-    FS-->>pantry_reader: pantry contents
-    pantry_reader->>LLM: summarize pantry
-    LLM-->>pantry_reader: structured pantry summary
+    Orchestrator->>pantry_reader: read pantry
+    pantry_reader->>FS: list pantry files
+    pantry_reader->>FS: read pantry.txt
+    FS-->>pantry_reader: contents
+    pantry_reader->>LLM: generate summary
+    LLM-->>pantry_reader: structured pantry data
 
-    Orchestrator->>menu_planner: execute subtask
-    menu_planner->>FS: read pantry summary / task
-    menu_planner->>LLM: propose 3 menus + pros/cons
-    LLM-->>menu_planner: menus, missing ingredients
+    Orchestrator->>menu_planner: propose 3 menus
+    menu_planner->>LLM: generate menus + missing ingredients
+    LLM-->>menu_planner: menu options
 
-    Orchestrator->>shopping_list_writer: execute subtask
-    shopping_list_writer->>LLM: draft dinner_plan + shopping list
-    LLM-->>shopping_list_writer: markdown content
+    Orchestrator->>shopping_list_writer: produce output files
+    shopping_list_writer->>LLM: generate markdown
     shopping_list_writer->>FS: write output/dinner_plan.md
     shopping_list_writer->>FS: write output/shopping_list.md
 
-    Orchestrator-->>main.py: final result text
-    main.py-->>User: done + files on disk
+    Orchestrator-->>main.py: task complete
+    main.py-->>User: finished
