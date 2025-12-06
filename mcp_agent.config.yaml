@@ -1,2 +1,18 @@
 # MCP Agent Configuration
 
+execution_engine: asyncio
+
+logger:
+  transports: [console]
+  level: info
+
+mcp:
+  servers:
+    filesystem:
+      command: "uvx"
+      args:
+        - "mcp-server-filesystem"
+        # we'll append the project root path from main.py
+
+openai:
+  default_model: gpt-4o
